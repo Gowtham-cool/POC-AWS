@@ -14,7 +14,7 @@ Parameters:
 
   ArtifactBucketName:
     Type: String
-    Default: poc-artifacts-bucket
+    Default: poc-bucket-creation
 
   VpcCidr:
     Type: String
