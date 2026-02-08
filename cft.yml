@@ -211,10 +211,13 @@ Resources:
 # S3 Bucket for Artifacts
 ###############################
 
-  ArtifactBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Ref ArtifactBucketName
+  ArtifactsBucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-${AWS::Region}-artifacts"
+    VersioningConfiguration:
+      Status: Enabled
+
 
 ###############################
 # IAM Roles
