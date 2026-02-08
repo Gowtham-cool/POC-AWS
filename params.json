@@ -2,12 +2,11 @@
   "Parameters": {
     "Namespace": "poc",
     "KeyPairName": "3-tier",
-    "ArtifactBucketName": "poc-bucket-creation",
     "VpcCidr": "10.0.0.0/16",
     "CodeBuildServiceRole": "arn:aws:iam::123456789012:role/poc-codebuild-role",
     "CodePipelineServiceRole": "arn:aws:iam::123456789012:role/poc-codepipeline-role",
-    "ConnectionArnOrg": "arn:aws:codestar-connections:us-east-1:123456789012:connection/abcd1234-5678-efgh-9101-ijklmnopqrst",
-    "FullRepositoryId": "MyOrg/POC-AWS",
+    "ConnectionArnOrg": "arn:aws:codeconnections:us-east-1:442216224934:connection/00180e30-2582-434c-978e-a0734b5c7015",
+    "FullRepositoryId": "Gowtham-cool/POC-AWS",
     "BranchName": "main", 
     "BuildSpec": "buildspec.yml"
   }
