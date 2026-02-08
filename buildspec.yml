@@ -1,0 +1,39 @@
+version: 0.2
+
+env:
+  variables:
+    APP_DIR: "app"                     # Directory containing your app code
+    DEPLOY_DIR: "/var/www/html"        # EC2 deployment path
+    SERVER_USER: "ec2-user"            # EC2 SSH user
+    SERVER_IP: "your-ec2-private-ip"   # Replace with dynamic or use SSM Parameter
+    BUILD_ENV: "prod"                  # Environment
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - echo "Starting install phase..."
+      - echo "Installing required packages..."
+      - pip install --upgrade pip wheel
+      - pip install paramiko  # Optional if doing SSH in Python
+
+  pre_build:
+    commands:
+      - echo "Pre-build phase: cleaning old artifacts..."
+      - rm -rf build/*
+      - mkdir -p build
+
+  build:
+    commands:
+      - echo "Build phase: preparing artifacts..."
+      - cp -r $APP_DIR/* build/
+      - echo "Build directory contents:"
+      - ls -la build/
+
+  post_build:
+    commands:
+      - echo "Post-build: artifacts ready for deployment"
+      - echo "You can either:"
+      - echo "1) Upload artifacts to S3 for CodePipeline Deploy stage"
+      - echo "2) Use custom scripts to SCP/SSH to EC2"
