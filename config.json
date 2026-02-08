@@ -1,0 +1,5 @@
+{
+    "appName": "POC Web App",
+    "env": "prod",
+    "port": 80
+}
