@@ -1,7 +1,7 @@
 {
   "Parameters": {
     "Namespace": "poc",
-    "KeyPairName": "my-ec2-keypair",
+    "KeyPairName": "3-tier",
     "ArtifactBucketName": "poc-bucket-creation",
     "VpcCidr": "10.0.0.0/16",
     "CodeBuildServiceRole": "arn:aws:iam::123456789012:role/poc-codebuild-role",
