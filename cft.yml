@@ -12,10 +12,6 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     Description: Existing EC2 KeyPair
 
-  ArtifactBucketName:
-    Type: String
-    Default: poc-bucket-creation
-
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
