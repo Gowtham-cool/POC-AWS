@@ -2,7 +2,7 @@ version: 0.2
 
 env:
   variables:
-    APP_DIR: "app"                     # Directory containing your app code
+    APP_DIR: "."                       # root of the repo
     DEPLOY_DIR: "/var/www/html"        # EC2 deployment path
     BUILD_ENV: "prod"                  # Environment
     EC2_TAG_KEY: "Name"                # EC2 tag key to identify instance
