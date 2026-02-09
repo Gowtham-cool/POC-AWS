@@ -41,16 +41,16 @@ phases:
     commands:
       - echo "Post-build: deploying to EC2 via SSM..."
       - echo "Deployment is triggered for EC2 instance with tag $EC2_TAG_KEY=$EC2_TAG_VALUE."
+      - echo "Finding EC2 instances..."
       - |
-        # Find EC2 instance IDs using the provided tag key and value
         INSTANCES=$(aws ec2 describe-instances \
           --filters "Name=tag:$EC2_TAG_KEY,Values=$EC2_TAG_VALUE" \
           "Name=instance-state-name,Values=running" \
           --query "Reservations[*].Instances[*].InstanceId" \
           --output text)
       - echo "Target EC2 Instances: $INSTANCES"
+      - echo "Deploying build artifacts..."
       - |
-        # Loop through each instance and deploy using SSM
         for instance in $INSTANCES; do
           echo "Deploying to $instance..."
           aws ssm send-command \
