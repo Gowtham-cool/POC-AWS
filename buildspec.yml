@@ -20,7 +20,7 @@ phases:
 
   pre_build:
     commands:
-      - echo "Pre-build phase: cleaning old artifacts..."
+      - echo "Pre-build phase:cleaning old artifacts..."
       - rm -rf build/*  # Clean the previous build directory
       - mkdir -p build  # Create a new build directory
       - echo "Copying application files to build directory..."
@@ -30,14 +30,14 @@ phases:
 
   build:
     commands:
-      - echo "Build phase: preparing artifacts..."
+      - echo "Build phase:preparing artifacts..."
       - echo "Build directory contents after copy:"
       - ls -la build/
       - echo "Build successful, ready for deployment."
 
   post_build:
     commands:
-      - echo "Post-build: deploying to EC2 via SSM..."
+      - echo "Post-build:deploying to EC2 via SSM..."
       - echo "Deployment is triggered for EC2 instance with tag $EC2_TAG_KEY=$EC2_TAG_VALUE."
       - echo "Finding EC2 instances..."
       - |
