@@ -2,81 +2,55 @@ version: 0.2
 
 env:
   variables:
-    APP_DIR: "."                       # root of the repo
-    DEPLOY_DIR: "/var/www/html"        # EC2 deployment path
-    BUILD_ENV: "prod"                  # Environment
-    EC2_TAG_KEY: "Name"                # EC2 tag key to identify instance
-    EC2_TAG_VALUE: "poc-ec2"           # EC2 tag value
+    APP_DIR: "."                     # repo root
+    BUILD_DIR: "build"
+    DEPLOY_DIR: "/var/www/html"      # EC2 deployment path
+    BUILD_ENV: "prod"                # Environment
+    EC2_TAG_KEY: "Name"
+    EC2_TAG_VALUE: "poc-ec2"         # matches the EC2 Name tag
+    SERVER_USER: "ec2-user"
 
 phases:
   install:
     runtime-versions:
       python: 3.10
     commands:
-      - echo "=== INSTALL PHASE ==="
-      - pip install --upgrade pip wheel boto3 paramiko
-      - echo "Install phase completed"
+      - echo "Install phase started..."
+      - pip install --upgrade pip wheel
+      - pip install paramiko boto3  # for optional SSM/SSH deployment
 
   pre_build:
     commands:
-      - echo "=== PRE-BUILD PHASE ==="
-      - rm -rf build/*
-      - mkdir -p build
-      - echo "Pre-build cleanup done"
+      - echo "Pre-build: cleaning old build directory..."
+      - rm -rf $BUILD_DIR
+      - mkdir -p $BUILD_DIR
+      - echo "Listing repo contents:"
+      - ls -la
 
   build:
     commands:
-      - echo "=== BUILD PHASE ==="
-      - cp -r $APP_DIR/* build/
-      - echo "Build artifacts ready:"
-      - ls -la build/
+      - echo "Build: copying files from repo root to build folder..."
+      - cp -r $APP_DIR/* $BUILD_DIR/
+      - echo "Contents of build directory:"
+      - ls -la $BUILD_DIR
 
   post_build:
     commands:
-      - echo "=== POST-BUILD PHASE ==="
-      - echo "Deploying to EC2 via SSM..."
+      - echo "Post-build: deploying to EC2 via SSM..."
       - |
-        python3 <<EOF
-        import boto3
-        import os
-
-        deploy_dir = os.environ['DEPLOY_DIR']
-        tag_key = os.environ['EC2_TAG_KEY']
-        tag_value = os.environ['EC2_TAG_VALUE']
-
-        ec2 = boto3.client('ec2', region_name='us-east-1')
-        ssm = boto3.client('ssm', region_name='us-east-1')
-
-        # Find EC2 instance by tag
-        response = ec2.describe_instances(
-            Filters=[{'Name': f'tag:{tag_key}', 'Values':[tag_value]}]
-        )
-
-        instance_ids = [
-            i['InstanceId']
-            for r in response['Reservations']
-            for i in r['Instances']
-        ]
-
-        if not instance_ids:
-            raise Exception(f"No EC2 instances found with tag {tag_key}={tag_value}")
-
-        # Send deployment command via SSM
-        commands = [
-            f'rm -rf {deploy_dir}/*',
-            f'cp -r /tmp/build/* {deploy_dir}/'
-        ]
-
-        ssm_response = ssm.send_command(
-            InstanceIds=instance_ids,
-            DocumentName="AWS-RunShellScript",
-            Parameters={'commands': commands}
-        )
-        print("SSM command sent successfully. Command ID:", ssm_response['Command']['CommandId'])
-        EOF
-      - echo "Deployment completed via SSM"
-
-artifacts:
-  files:
-    - '**/*'
-  base-directory: build
+        INSTANCES=$(aws ec2 describe-instances \
+          --filters "Name=tag:$EC2_TAG_KEY,Values=$EC2_TAG_VALUE" \
+          "Name=instance-state-name,Values=running" \
+          --query "Reservations[*].Instances[*].InstanceId" \
+          --output text)
+      - echo "Target EC2 Instances: $INSTANCES"
+      - |
+        for instance in $INSTANCES; do
+          echo "Deploying to $instance..."
+          aws ssm send-command \
+            --targets "Key=InstanceIds,Values=$instance" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploying build artifacts" \
+            --parameters commands="rm -rf $DEPLOY_DIR/*; cp -r /tmp/build/* $DEPLOY_DIR/"
+        done
+      - echo "Deployment commands sent via SSM."
