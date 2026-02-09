@@ -2,13 +2,11 @@ version: 0.2
 
 env:
   variables:
-    APP_DIR: "."                     # Root directory containing your app code
+    APP_DIR: "."                    # Root directory containing your app code
     DEPLOY_DIR: "/var/www/html"      # EC2 deployment path
     SERVER_USER: "ec2-user"          # EC2 SSH user
-    SERVER_IP: "10.0.3.33"           # Replace with dynamic or use SSM Parameter
+    SERVER_IP: "your-ec2-private-ip" # Replace with dynamic or use SSM Parameter
     BUILD_ENV: "prod"                # Environment
-    EC2_TAG_KEY: "Name"              # Tag key to identify EC2 instances
-    EC2_TAG_VALUE: "your-instance"   # Tag value to identify EC2 instances
 
 phases:
   install:
@@ -23,12 +21,12 @@ phases:
   pre_build:
     commands:
       - echo "Pre-build phase: cleaning old artifacts..."
-      - rm -rf build/*
-      - mkdir -p build
+      - rm -rf build/*  # Clean the previous build directory
+      - mkdir -p build  # Create a new build directory
       - echo "Copying application files to build directory..."
-      - cp -r $APP_DIR/* build/
+      - cp -r $APP_DIR/* build/  # Copy files into build directory
       - echo "Build directory contents:"
-      - ls -la build/
+      - ls -la build/  # List contents of build directory for verification
 
   build:
     commands:
