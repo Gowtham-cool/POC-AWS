@@ -2,38 +2,46 @@ version: 0.2
 
 env:
   variables:
-    APP_DIR: "app"                     # Directory containing your app code
-    DEPLOY_DIR: "/var/www/html"        # EC2 deployment path
-    SERVER_USER: "ec2-user"            # EC2 SSH user
-    SERVER_IP: "your-ec2-private-ip"   # Replace with dynamic or use SSM Parameter
-    BUILD_ENV: "prod"                  # Environment
+    APP_DIR: "app"
+    BUILD_OUTPUT: "build"
+    APP_NAME: "poc-web-app"
 
 phases:
-  install:
-    runtime-versions:
-      python: 3.10
-    commands:
-      - echo "Starting install phase..."
-      - echo "Installing required packages..."
-      - pip install --upgrade pip wheel
-      - pip install paramiko  # Optional if doing SSH in Python
-
   pre_build:
     commands:
-      - echo "Pre-build phase: cleaning old artifacts..."
-      - rm -rf build/*
-      - mkdir -p build
+      - echo "Cleaning previous build output"
+      - rm -rf $BUILD_OUTPUT
+      - mkdir -p $BUILD_OUTPUT
 
   build:
     commands:
-      - echo "Build phase: preparing artifacts..."
-      - cp -r $APP_DIR/* build/
-      - echo "Build directory contents:"
-      - ls -la build/
+      - echo "Copying application files"
+      - cp -r $APP_DIR/* $BUILD_OUTPUT/
+      - ls -la $BUILD_OUTPUT
 
   post_build:
     commands:
-      - echo "Post-build: artifacts ready for deployment"
-      - echo "You can either:"
-      - echo "1) Upload artifacts to S3 for CodePipeline Deploy stage"
-      - echo "2) Use custom scripts to SCP/SSH to EC2"
+      - echo "Running post-build validations"
+
+      # 1️⃣ Validate required files
+      - test -f $BUILD_OUTPUT/index.html || (echo "index.html missing" && exit 1)
+
+      # 2️⃣ Create build metadata (very real-world)
+      - |
+        cat <<EOF > $BUILD_OUTPUT/build-info.json
+        {
+          "application": "${APP_NAME}",
+          "build_id": "${CODEBUILD_BUILD_ID}",
+          "commit_id": "${CODEBUILD_RESOLVED_SOURCE_VERSION}",
+          "build_time": "$(date -u)"
+        }
+        EOF
+
+      # 3️⃣ Final sanity check
+      - echo "Final build output:"
+      - ls -la $BUILD_OUTPUT
+
+artifacts:
+  base-directory: $BUILD_OUTPUT
+  files:
+    - '**/*'
