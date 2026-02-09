@@ -5,7 +5,7 @@ env:
     APP_DIR: "."                    # Root directory containing your app code
     DEPLOY_DIR: "/var/www/html"      # EC2 deployment path
     SERVER_USER: "ec2-user"          # EC2 SSH user
-    SERVER_IP: "your-ec2-private-ip" # Replace with dynamic or use SSM Parameter
+    SERVER_IP: "10.0.3.33" # Replace with dynamic or use SSM Parameter
     BUILD_ENV: "prod"                # Environment
     EC2_TAG_KEY: "Name"              # Tag key to identify EC2 instances
     EC2_TAG_VALUE: "your-instance"   # Tag value to identify EC2 instances
