@@ -1,38 +1,57 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Full POC: VPC + NAT + EC2 + ALB + S3 + IAM + CodeBuild + CodePipeline
+Description: "Strong POC: VPC + NAT + EC2 + ALB + S3 + IAM + CodeBuild + CodePipeline"
 
 Parameters:
   Namespace:
     Type: String
     Default: poc
-    Description: Prefix for all resources
-
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Existing EC2 KeyPair
 
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
 
-  BranchName:
+  PublicSubnet1Cidr:
     Type: String
-    Default: main
+    Default: 10.0.1.0/24
 
-  FullRepositoryId:
+  PublicSubnet2Cidr:
     Type: String
-    Description: GitHub repo like "Gowtham-cool/POC-AWS"
+    Default: 10.0.2.0/24
 
-  GitConnectionArn:
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.4.0/24
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+
+  ArtifactBucketName:
+    Type: String
+    Default: poc-artifacts-123456  # must be lowercase & globally unique
+
+  GitHubConnectionArn:
     Type: String
     Description: CodeStar connection ARN
 
+  GitHubRepo:
+    Type: String
+    Description: GitHub repo in format org/repo
+
+  GitHubBranch:
+    Type: String
+    Default: main
+
 Resources:
 
-###############################
-# VPC + Subnets + IGW + NAT
-###############################
-
+  # ---------------- VPC ----------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -45,61 +64,47 @@ Resources:
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${Namespace}-igw"
 
-  AttachIGW:
+  AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
+  # ---------------- Subnets ----------------
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: !Ref PublicSubnet1Cidr
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${Namespace}-public-1"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
+      CidrBlock: !Ref PublicSubnet2Cidr
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${Namespace}-public-2"
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
+      CidrBlock: !Ref PrivateSubnet1Cidr
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${Namespace}-private-1"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
+      CidrBlock: !Ref PrivateSubnet2Cidr
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${Namespace}-private-2"
 
+  # ---------------- Route Tables ----------------
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -107,27 +112,27 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachIGW
+    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
 
-  PublicSubnet1RouteTableAssociation:
+  PublicSubnet1RouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
-  PublicSubnet2RouteTableAssociation:
+  PublicSubnet2RouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
+  # ---------------- NAT ----------------
   NatEIP:
     Type: AWS::EC2::EIP
-    DependsOn: AttachIGW
     Properties:
       Domain: vpc
 
@@ -149,23 +154,20 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway
 
-  PrivateSubnet1RouteTableAssociation:
+  PrivateSubnet1RouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
       RouteTableId: !Ref PrivateRouteTable
 
-  PrivateSubnet2RouteTableAssociation:
+  PrivateSubnet2RouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
-###############################
-# Security Groups
-###############################
-
-  ALBSecurityGroup:
+  # ---------------- Security Groups ----------------
+  ALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref VPC
@@ -175,50 +177,37 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
 
-  EC2SecurityGroup:
+  EC2SG:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref VPC
       GroupDescription: EC2 SG
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref ALBSG
 
-###############################
-# EC2 + ALB
-###############################
-
+  # ---------------- EC2 ----------------
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.micro
+      InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
-      SecurityGroupIds:
-        - !Ref EC2SecurityGroup
       SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref EC2SG
       ImageId: ami-0c02fb55956c7d316
-      Tags:
-        - Key: Name
-          Value: !Sub "${Namespace}-ec2"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum install -y httpd
+          systemctl start httpd
+          echo "POC App Running" > /var/www/html/index.html
 
-  ApplicationLoadBalancer:
+  # ---------------- ALB ----------------
+  ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub "${Namespace}-alb"
@@ -226,47 +215,39 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       SecurityGroups:
-        - !Ref ALBSecurityGroup
+        - !Ref ALBSG
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
 
-  ALBTargetGroup:
+  TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${Namespace}-tg"
+      VpcId: !Ref VPC
       Port: 80
       Protocol: HTTP
-      VpcId: !Ref VPC
       TargetType: instance
-      HealthCheckPath: /
+      Targets:
+        - Id: !Ref EC2Instance
 
-  ALBListener:
+  Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      LoadBalancerArn: !Ref ALB
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
+          TargetGroupArn: !Ref TargetGroup
 
-###############################
-# S3 Bucket for Artifacts
-###############################
-
+  # ---------------- S3 ----------------
   ArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${Namespace}-artifacts"
-      VersioningConfiguration:
-        Status: Enabled
+      BucketName: !Ref ArtifactBucketName
 
-###############################
-# IAM Roles
-###############################
-
-  CodeBuildServiceRole:
+  # ---------------- IAM Roles ----------------
+  CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${Namespace}-codebuild-role"
@@ -281,7 +262,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
 
-  CodePipelineServiceRole:
+  CodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${Namespace}-codepipeline-role"
@@ -297,15 +278,11 @@ Resources:
         - arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess
         - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
 
-###############################
-# CodeBuild Project
-###############################
-
-  SourceCodeBuildProject:
+  # ---------------- CodeBuild ----------------
+  SourceBuild:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: !Sub "${Namespace}-build"
-      Description: Build project
       Source:
         Type: CODEPIPELINE
         BuildSpec: "buildspec.yml"
@@ -313,7 +290,7 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
         Type: LINUX_CONTAINER
-      ServiceRole: !Ref CodeBuildServiceRole
+      ServiceRole: !Ref CodeBuildRole
       Artifacts:
         Type: CODEPIPELINE
       VpcConfig:
@@ -321,18 +298,14 @@ Resources:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
         SecurityGroupIds:
-          - !Ref EC2SecurityGroup
-        VpcId: !Ref VPC
+          - !Ref EC2SG
 
-###############################
-# CodePipeline
-###############################
-
-  AppPipeline:
+  # ---------------- CodePipeline ----------------
+  Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: !Sub "${Namespace}-pipeline"
-      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactsBucket
@@ -348,9 +321,9 @@ Resources:
               OutputArtifacts:
                 - Name: SourceOutput
               Configuration:
-                ConnectionArn: !Ref GitConnectionArn
-                FullRepositoryId: !Ref FullRepositoryId
-                BranchName: !Ref BranchName
+                ConnectionArn: !Ref GitHubConnectionArn
+                FullRepositoryId: !Ref GitHubRepo
+                BranchName: !Ref GitHubBranch
                 OutputArtifactFormat: CODE_ZIP
               RunOrder: 1
         - Name: Build
@@ -366,16 +339,10 @@ Resources:
               OutputArtifacts:
                 - Name: BuildOutput
               Configuration:
-                ProjectName: !Ref SourceCodeBuildProject
+                ProjectName: !Ref SourceBuild
               RunOrder: 1
 
 Outputs:
-  EC2InstanceId:
-    Description: EC2 instance ID
-    Value: !Ref EC2Instance
-  ALBDNSName:
-    Description: ALB DNS
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-  ArtifactBucketName:
-    Description: Artifact bucket
-    Value: !Ref ArtifactsBucket
+  ALBURL:
+    Description: Application URL
+    Value: !Sub "http://${ALB.DNSName}"
