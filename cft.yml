@@ -10,6 +10,7 @@ Parameters:
 
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
+    Default : 3-tier
     Description: Existing EC2 KeyPair
 
   VpcCidr:
@@ -28,6 +29,7 @@ Parameters:
 
   GitConnectionArn:
     Type: String
+    Default: arn:aws:codeconnections:us-east-1:442216224934:connection/00180e30-2582-434c-978e-a0734b5c7015
     Description: CodeStar Connection ARN
 
 Resources:
