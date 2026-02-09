@@ -2,46 +2,81 @@ version: 0.2
 
 env:
   variables:
-    APP_DIR: "app"
-    BUILD_OUTPUT: "build"
-    APP_NAME: "poc-web-app"
+    APP_DIR: "app"                     # Directory containing your app code
+    DEPLOY_DIR: "/var/www/html"        # EC2 deployment path
+    BUILD_ENV: "prod"                  # Environment
+    EC2_TAG_KEY: "Name"                # EC2 tag key to identify instance
+    EC2_TAG_VALUE: "poc-ec2"           # EC2 tag value
 
 phases:
+  install:
+    runtime-versions:
+      python: 3.10
+    commands:
+      - echo "=== INSTALL PHASE ==="
+      - pip install --upgrade pip wheel boto3 paramiko
+      - echo "Install phase completed"
+
   pre_build:
     commands:
-      - echo "Cleaning previous build output"
-      - rm -rf $BUILD_OUTPUT
-      - mkdir -p $BUILD_OUTPUT
+      - echo "=== PRE-BUILD PHASE ==="
+      - rm -rf build/*
+      - mkdir -p build
+      - echo "Pre-build cleanup done"
 
   build:
     commands:
-      - echo "Copying application files"
-      - cp -r $APP_DIR/* $BUILD_OUTPUT/
-      - ls -la $BUILD_OUTPUT
+      - echo "=== BUILD PHASE ==="
+      - cp -r $APP_DIR/* build/
+      - echo "Build artifacts ready:"
+      - ls -la build/
 
   post_build:
     commands:
-      - echo "Running post-build validations"
-
-      # 1️⃣ Validate required files
-      - test -f $BUILD_OUTPUT/index.html || (echo "index.html missing" && exit 1)
-
-      # 2️⃣ Create build metadata (very real-world)
+      - echo "=== POST-BUILD PHASE ==="
+      - echo "Deploying to EC2 via SSM..."
       - |
-        cat <<EOF > $BUILD_OUTPUT/build-info.json
-        {
-          "application": "${APP_NAME}",
-          "build_id": "${CODEBUILD_BUILD_ID}",
-          "commit_id": "${CODEBUILD_RESOLVED_SOURCE_VERSION}",
-          "build_time": "$(date -u)"
-        }
-        EOF
+        python3 <<EOF
+        import boto3
+        import os
 
-      # 3️⃣ Final sanity check
-      - echo "Final build output:"
-      - ls -la $BUILD_OUTPUT
+        deploy_dir = os.environ['DEPLOY_DIR']
+        tag_key = os.environ['EC2_TAG_KEY']
+        tag_value = os.environ['EC2_TAG_VALUE']
+
+        ec2 = boto3.client('ec2', region_name='us-east-1')
+        ssm = boto3.client('ssm', region_name='us-east-1')
+
+        # Find EC2 instance by tag
+        response = ec2.describe_instances(
+            Filters=[{'Name': f'tag:{tag_key}', 'Values':[tag_value]}]
+        )
+
+        instance_ids = [
+            i['InstanceId']
+            for r in response['Reservations']
+            for i in r['Instances']
+        ]
+
+        if not instance_ids:
+            raise Exception(f"No EC2 instances found with tag {tag_key}={tag_value}")
+
+        # Send deployment command via SSM
+        commands = [
+            f'rm -rf {deploy_dir}/*',
+            f'cp -r /tmp/build/* {deploy_dir}/'
+        ]
+
+        ssm_response = ssm.send_command(
+            InstanceIds=instance_ids,
+            DocumentName="AWS-RunShellScript",
+            Parameters={'commands': commands}
+        )
+        print("SSM command sent successfully. Command ID:", ssm_response['Command']['CommandId'])
+        EOF
+      - echo "Deployment completed via SSM"
 
 artifacts:
-  base-directory: $BUILD_OUTPUT
   files:
     - '**/*'
+  base-directory: build
